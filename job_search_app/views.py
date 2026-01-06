@@ -141,68 +141,102 @@ def search_jobs(request):
     else:
         mode = "both"
     
-    # Calculate pages needed (fetch more since we'll filter)
-    pages_needed = max(1, (limit // 10) + 3)  # Fetch extra pages for filtering
+    # Adaptive fetching: start with initial pages, fetch more if needed
+    initial_pages = max(1, (limit // 10) + 3)  # Initial estimate
+    max_pages = 50  # Maximum pages to fetch (safety limit)
+    current_start_page = 1
 
-    # Fetch jobs from API with location, radius, and date filter
-    raw_jobs = fetch_jobs(q, location=location, radius=radius, date_posted=date_posted, num_pages=pages_needed)
-    
-    if not raw_jobs:
-        return render(request, 'jobs/results.html', {
-            "jobs": [],
-            "query": q,
-            "location": location,
-            "radius": radius,
-            "message": "No jobs found matching your criteria."
-        })
-    
     # Filter and process jobs
     filtered_jobs = []
     blocked_count = 0
-    mode_filtered_count = 0  # Track how many filtered by title/description mode
-    
+    mode_filtered_count = 0
+    all_raw_jobs = []
+    seen_job_ids = set()  # Track seen job IDs to avoid duplicates
+
     # Split search query into keywords
     search_keywords = [kw.strip().lower() for kw in q.split() if kw.strip()]
-    
-    for job in raw_jobs:
-        # Filter 1: Check if job is from a blocked source
-        if is_blocked_source(job):
-            blocked_count += 1
-            continue
-        
-        # Filter 2: Check if search keywords appear in the right place (title/description/both)
-        title = job.get("job_title", "").lower()
-        description = job.get("job_description", "").lower()
-        
-        # Check if ALL search keywords appear in the appropriate field(s)
-        if mode == "title":
-            # ALL keywords must be in title
-            if not all(keyword in title for keyword in search_keywords):
-                mode_filtered_count += 1
+
+    # Fetch jobs in batches until we have enough filtered results
+    while len(filtered_jobs) < limit and current_start_page <= max_pages:
+        # Determine how many pages to fetch in this batch
+        if current_start_page == 1:
+            batch_size = initial_pages
+        else:
+            # Adaptively fetch more based on filter rejection rate
+            remaining_needed = limit - len(filtered_jobs)
+            # If we're filtering out a lot, fetch more pages
+            batch_size = max(3, remaining_needed // 5)
+
+        # Fetch a batch of jobs starting from current_start_page
+        batch_jobs = fetch_jobs(
+            q,
+            location=location,
+            radius=radius,
+            date_posted=date_posted,
+            num_pages=batch_size,
+            start_page=current_start_page
+        )
+
+        if not batch_jobs:
+            # No more jobs available from API
+            break
+
+        all_raw_jobs.extend(batch_jobs)
+
+        # Process the batch
+        for job in batch_jobs:
+            # Skip duplicates (check job_id if available)
+            job_id = job.get("job_id")
+            if job_id:
+                if job_id in seen_job_ids:
+                    continue
+                seen_job_ids.add(job_id)
+
+            # Filter 1: Check if job is from a blocked source
+            if is_blocked_source(job):
+                blocked_count += 1
                 continue
-        elif mode == "description":
-            # ALL keywords must be in description
-            if not all(keyword in description for keyword in search_keywords):
-                mode_filtered_count += 1
+
+            # Filter 2: Check if search keywords appear in the right place
+            title = job.get("job_title", "").lower()
+            description = job.get("job_description", "").lower()
+
+            if mode == "title":
+                if not all(keyword in title for keyword in search_keywords):
+                    mode_filtered_count += 1
+                    continue
+            elif mode == "description":
+                if not all(keyword in description for keyword in search_keywords):
+                    mode_filtered_count += 1
+                    continue
+
+            # Filter 3: Check for excluded keywords
+            if keyword_filter(job, exclude, mode):
                 continue
-        # If mode == "both", keep all jobs (API already filtered)
-        
-        # Filter 3: Check for excluded keywords (always checks both title and description)
-        if keyword_filter(job, exclude, mode):
-            continue
-        
-        # Job passed all filters
-        job["experience_required"] = extract_experience(job.get("job_description", ""))
-        filtered_jobs.append(job)
-        
+
+            # Job passed all filters
+            job["experience_required"] = extract_experience(job.get("job_description", ""))
+            filtered_jobs.append(job)
+
+            if len(filtered_jobs) >= limit:
+                break
+
+        # Move to next batch of pages
+        current_start_page += batch_size
+
+        # If we got enough results, stop fetching
         if len(filtered_jobs) >= limit:
             break
+
+    raw_jobs = all_raw_jobs  # For logging below
     
     # Debug logging
+    print(f"DEBUG - Total pages fetched: {current_start_page - 1}")
     print(f"DEBUG - Total jobs from API: {len(raw_jobs)}")
     print(f"DEBUG - Blocked from weak sources: {blocked_count}")
     print(f"DEBUG - Filtered by {mode} mode: {mode_filtered_count}")
     print(f"DEBUG - After all filters: {len(filtered_jobs)}")
+    print(f"DEBUG - Requested limit: {limit}")
     
     # Paginate the filtered results
     paginator = Paginator(filtered_jobs, results_per_page)

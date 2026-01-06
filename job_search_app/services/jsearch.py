@@ -80,7 +80,7 @@ import os
 import requests
 from django.conf import settings
 
-def fetch_jobs(query, location, radius="", date_posted="all", num_pages=1):
+def fetch_jobs(query, location, radius="", date_posted="all", num_pages=1, start_page=1):
     """
     Fetch jobs from OpenWebNinja JSearch API
 
@@ -90,6 +90,7 @@ def fetch_jobs(query, location, radius="", date_posted="all", num_pages=1):
         radius: Search radius in miles (optional)
         date_posted: Date filter - 'all', 'today', '3days', 'week', '2weeks', 'month' (optional)
         num_pages: Number of pages to fetch
+        start_page: Page number to start from (default: 1)
     """
     all_jobs = []
 
@@ -108,7 +109,7 @@ def fetch_jobs(query, location, radius="", date_posted="all", num_pages=1):
     }
 
 
-    for page in range(1, num_pages + 1):
+    for page in range(start_page, start_page + num_pages):
         try:
             params = {
                 "query": f"{query} in {location}",
