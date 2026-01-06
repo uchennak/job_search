@@ -16,6 +16,7 @@ BLOCKED_SOURCES = [
     "trovit",
     "locanto",
     "geebo",
+    "learn4good.com",
     # Add more as you discover them
 ]
 

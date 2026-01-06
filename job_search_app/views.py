@@ -113,7 +113,8 @@ def search_jobs(request):
     q = request.GET.get("q", "")
     location = request.GET.get("location", "").strip()
     radius = request.GET.get("radius", "").strip()
-    
+    date_posted = request.GET.get("date_posted", "all")
+
     # Validate required fields
     if not q or not location:
         error_message = "Both job keywords and location are required."
@@ -121,10 +122,10 @@ def search_jobs(request):
             "jobs": [],
             "error": error_message
         })
-    
+
     exclude_raw = request.GET.get("exclude", "")
     exclude = [k.strip() for k in exclude_raw.split(",") if k.strip()]
-    
+
     limit = int(request.GET.get("limit", 25))
     page_number = request.GET.get("page", 1)
     results_per_page = int(request.GET.get("per_page", 10))
@@ -142,9 +143,9 @@ def search_jobs(request):
     
     # Calculate pages needed (fetch more since we'll filter)
     pages_needed = max(1, (limit // 10) + 3)  # Fetch extra pages for filtering
-    
-    # Fetch jobs from API with location and radius
-    raw_jobs = fetch_jobs(q, location=location, radius=radius, num_pages=pages_needed)
+
+    # Fetch jobs from API with location, radius, and date filter
+    raw_jobs = fetch_jobs(q, location=location, radius=radius, date_posted=date_posted, num_pages=pages_needed)
     
     if not raw_jobs:
         return render(request, 'jobs/results.html', {
@@ -212,6 +213,7 @@ def search_jobs(request):
         "query": q,
         "location": location,
         "radius": radius,
+        "date_posted": date_posted,
         "exclude": exclude_raw,
         "search_scope": search_scope,
         "limit": limit,

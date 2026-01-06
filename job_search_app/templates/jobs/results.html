@@ -51,6 +51,7 @@
                     <th>Company</th>
                     <th>Job Title</th>
                     <th>Location</th>
+                    <th>Date Posted</th>
                     <th>Experience</th>
                     <th>Apply</th>
                 </tr>
@@ -68,6 +69,9 @@
                         {% else %}
                             N/A
                         {% endif %}
+                    </td>
+                    <td class="date-posted">
+                        {{ job.job_posted_at_datetime_utc|default:"N/A"|slice:":10" }}
                     </td>
                     <td>
                         <span class="experience">
@@ -88,10 +92,10 @@
         {% if jobs.has_other_pages %}
         <div class="pagination">
             {% if jobs.has_previous %}
-                <a href="?q={{ query }}&location={{ location }}&exclude={{ exclude }}&title_only={{ title_only }}&description_only={{ description_only }}&limit={{ limit }}&per_page={{ per_page }}&page=1">
+                <a href="?q={{ query }}&location={{ location }}&radius={{ radius }}&date_posted={{ date_posted }}&exclude={{ exclude }}&search_scope={{ search_scope }}&limit={{ limit }}&per_page={{ per_page }}&page=1">
                     &laquo; First
                 </a>
-                <a href="?q={{ query }}&location={{ location }}&exclude={{ exclude }}&title_only={{ title_only }}&description_only={{ description_only }}&limit={{ limit }}&per_page={{ per_page }}&page={{ jobs.previous_page_number }}">
+                <a href="?q={{ query }}&location={{ location }}&radius={{ radius }}&date_posted={{ date_posted }}&exclude={{ exclude }}&search_scope={{ search_scope }}&limit={{ limit }}&per_page={{ per_page }}&page={{ jobs.previous_page_number }}">
                     &lsaquo; Previous
                 </a>
             {% endif %}
@@ -101,10 +105,10 @@
             </span>
             
             {% if jobs.has_next %}
-                <a href="?q={{ query }}&location={{ location }}&exclude={{ exclude }}&title_only={{ title_only }}&description_only={{ description_only }}&limit={{ limit }}&per_page={{ per_page }}&page={{ jobs.next_page_number }}">
+                <a href="?q={{ query }}&location={{ location }}&radius={{ radius }}&date_posted={{ date_posted }}&exclude={{ exclude }}&search_scope={{ search_scope }}&limit={{ limit }}&per_page={{ per_page }}&page={{ jobs.next_page_number }}">
                     Next &rsaquo;
                 </a>
-                <a href="?q={{ query }}&location={{ location }}&exclude={{ exclude }}&title_only={{ title_only }}&description_only={{ description_only }}&limit={{ limit }}&per_page={{ per_page }}&page={{ jobs.paginator.num_pages }}">
+                <a href="?q={{ query }}&location={{ location }}&radius={{ radius }}&date_posted={{ date_posted }}&exclude={{ exclude }}&search_scope={{ search_scope }}&limit={{ limit }}&per_page={{ per_page }}&page={{ jobs.paginator.num_pages }}">
                     Last &raquo;
                 </a>
             {% endif %}
