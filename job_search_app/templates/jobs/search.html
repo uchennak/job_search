@@ -1,0 +1,52 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Search</title>
+    <link rel="stylesheet" href="/static/css/styles.css">   
+</head>
+<body>
+    <h1>Job Search</h1>
+    <form method="get" action="{% url 'search_jobs' %}">
+       
+        <label>Search query:</label>
+        <input type="text" name="q" placeholder="Backend Engineer" required><br>
+        
+        <label>Exclude keywords:</label>
+        <input type="text" name="exclude" placeholder="senior, lead"><br>
+
+        <div>
+        <label for="location">Location (Required):</label>
+        <input type="text" name="location" id="location" placeholder="e.g., New York, NY or 10001" required>
+        <small>Enter city and state (e.g., Austin, TX) or zip code (e.g., 78701)</small>
+        </div>
+
+        <div class="form-group">
+                <label for="radius">Search Radius:</label>
+                <select name="radius" id="radius">
+                    <option value="">Exact location</option>
+                    <option value="10">Within 10 miles</option>
+                    <option value="25">Within 25 miles</option>
+                </select>
+            </div>
+
+        <label>Job title only:</label>
+        <input type="checkbox" name="title_only"><br>
+        
+        <label>Description only:</label>
+        <input type="checkbox" name="description_only"><br>
+        
+        <label>Result limit:</label>
+        <input type="number" name="limit" value="25" min="1" max="500"><br>
+        
+        <label>Results per page:</label>
+        <select name="per_page">
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+        </select><br>
+        
+        <button type="submit">Search</button>
+    </form>
+</body>
+</html>
