@@ -78,6 +78,7 @@
 # jobs/services/jsearch.py
 import os
 import requests
+from django.conf import settings
 
 def fetch_jobs(query, location, radius="", num_pages=1):
     """
@@ -85,11 +86,11 @@ def fetch_jobs(query, location, radius="", num_pages=1):
     """
     all_jobs = []
 
-    # Get API key from environment
-    api_key = os.environ.get("JSEARCH_API_KEY")
+    # Get API key from Django settings (loaded from Parameter Store)
+    api_key = settings.JSEARCH_API_KEY
 
     if not api_key:
-        print("ERROR - OPENWEBNINJA_API_KEY environment variable not set!")
+        print("ERROR - JSEARCH_API_KEY not loaded from Parameter Store!")
         return []
 
     base_url = "https://api.openwebninja.com/jsearch/search"
