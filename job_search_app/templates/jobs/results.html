@@ -32,9 +32,9 @@
             {% if exclude %}
                 <p>🚫 <strong>Excluding:</strong> {{ exclude }}</p>
             {% endif %}
-            {% if title_only %}
+            {% if search_scope == 'title_only' %}
                 <p>📝 <strong>Filter:</strong> Searching in titles only</p>
-            {% elif description_only %}
+            {% elif search_scope == 'description_only' %}
                 <p>📝 <strong>Filter:</strong> Searching in descriptions only</p>
             {% endif %}
         </div>

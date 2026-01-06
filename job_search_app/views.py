@@ -126,17 +126,19 @@ def search_jobs(request):
     exclude = [k.strip() for k in exclude_raw.split(",") if k.strip()]
     
     limit = int(request.GET.get("limit", 25))
-    title_only = request.GET.get("title_only") == "on"
-    description_only = request.GET.get("description_only") == "on"
     page_number = request.GET.get("page", 1)
     results_per_page = int(request.GET.get("per_page", 10))
-    
-    # Determine mode based on checkboxes
-    mode = "both"
-    if title_only:
+
+    # Get search scope from radio button (both, title_only, or description_only)
+    search_scope = request.GET.get("search_scope", "both")
+
+    # Map search_scope to mode
+    if search_scope == "title_only":
         mode = "title"
-    elif description_only:
+    elif search_scope == "description_only":
         mode = "description"
+    else:
+        mode = "both"
     
     # Calculate pages needed (fetch more since we'll filter)
     pages_needed = max(1, (limit // 10) + 3)  # Fetch extra pages for filtering
@@ -211,8 +213,7 @@ def search_jobs(request):
         "location": location,
         "radius": radius,
         "exclude": exclude_raw,
-        "title_only": "on" if title_only else "",
-        "description_only": "on" if description_only else "",
+        "search_scope": search_scope,
         "limit": limit,
         "per_page": results_per_page,
         "blocked_count": blocked_count,
