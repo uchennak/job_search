@@ -140,108 +140,131 @@ def search_jobs(request):
         mode = "description"
     else:
         mode = "both"
-    
-    # Adaptive fetching: start with initial pages, fetch more if needed
-    initial_pages = max(1, (limit // 10) + 3)  # Initial estimate
-    max_pages = 50  # Maximum pages to fetch (safety limit)
-    current_start_page = 1
 
-    # Filter and process jobs
-    filtered_jobs = []
-    blocked_count = 0
-    mode_filtered_count = 0
-    all_raw_jobs = []
-    seen_job_ids = set()  # Track seen job IDs to avoid duplicates
+    # Create a unique cache key for this search
+    cache_key = f"{q}|{location}|{radius}|{date_posted}|{exclude_raw}|{search_scope}|{limit}"
 
-    # Split search query into keywords
-    search_keywords = [kw.strip().lower() for kw in q.split() if kw.strip()]
+    # Check if this is the same search as cached (use session to store results)
+    cached_search_key = request.session.get("search_cache_key")
 
-    # Fetch jobs in batches until we have enough filtered results
-    while len(filtered_jobs) < limit and current_start_page <= max_pages:
-        # Determine how many pages to fetch in this batch
-        if current_start_page == 1:
-            batch_size = initial_pages
-        else:
-            # Adaptively fetch more based on filter rejection rate
-            remaining_needed = limit - len(filtered_jobs)
-            # If we're filtering out a lot, fetch more pages
-            batch_size = max(3, remaining_needed // 5)
+    # If search parameters changed or no cache exists, fetch fresh results
+    if cached_search_key != cache_key:
+        print("DEBUG - New search detected, fetching fresh results from API")
 
-        # Fetch a batch of jobs starting from current_start_page
-        batch_jobs = fetch_jobs(
-            q,
-            location=location,
-            radius=radius,
-            date_posted=date_posted,
-            num_pages=batch_size,
-            start_page=current_start_page
-        )
+        # Adaptive fetching: start with initial pages, fetch more if needed
+        initial_pages = max(1, (limit // 10) + 3)  # Initial estimate
+        max_pages = 50  # Maximum pages to fetch (safety limit)
+        current_start_page = 1
 
-        if not batch_jobs:
-            # No more jobs available from API
-            break
+        # Filter and process jobs
+        filtered_jobs = []
+        blocked_count = 0
+        mode_filtered_count = 0
+        all_raw_jobs = []
+        seen_job_ids = set()  # Track seen job IDs to avoid duplicates
 
-        all_raw_jobs.extend(batch_jobs)
+        # Split search query into keywords
+        search_keywords = [kw.strip().lower() for kw in q.split() if kw.strip()]
 
-        # Process the batch
-        for job in batch_jobs:
-            # Skip duplicates (check job_id if available)
-            job_id = job.get("job_id")
-            if job_id:
-                if job_id in seen_job_ids:
-                    continue
-                seen_job_ids.add(job_id)
+        # Fetch jobs in batches until we have enough filtered results
+        while len(filtered_jobs) < limit and current_start_page <= max_pages:
+            # Determine how many pages to fetch in this batch
+            if current_start_page == 1:
+                batch_size = initial_pages
+            else:
+                # Adaptively fetch more based on filter rejection rate
+                remaining_needed = limit - len(filtered_jobs)
+                # If we're filtering out a lot, fetch more pages
+                batch_size = max(3, remaining_needed // 5)
 
-            # Filter 1: Check if job is from a blocked source
-            if is_blocked_source(job):
-                blocked_count += 1
-                continue
+            # Fetch a batch of jobs starting from current_start_page
+            batch_jobs = fetch_jobs(
+                q,
+                location=location,
+                radius=radius,
+                date_posted=date_posted,
+                num_pages=batch_size,
+                start_page=current_start_page
+            )
 
-            # Filter 2: Check if search keywords appear in the right place
-            title = job.get("job_title", "").lower()
-            description = job.get("job_description", "").lower()
+            if not batch_jobs:
+                # No more jobs available from API
+                break
 
-            if mode == "title":
-                if not all(keyword in title for keyword in search_keywords):
-                    mode_filtered_count += 1
-                    continue
-            elif mode == "description":
-                if not all(keyword in description for keyword in search_keywords):
-                    mode_filtered_count += 1
+            all_raw_jobs.extend(batch_jobs)
+
+            # Process the batch
+            for job in batch_jobs:
+                # Skip duplicates (check job_id if available)
+                job_id = job.get("job_id")
+                if job_id:
+                    if job_id in seen_job_ids:
+                        continue
+                    seen_job_ids.add(job_id)
+
+                # Filter 1: Check if job is from a blocked source
+                if is_blocked_source(job):
+                    blocked_count += 1
                     continue
 
-            # Filter 3: Check for excluded keywords
-            if keyword_filter(job, exclude, mode):
-                continue
+                # Filter 2: Check if search keywords appear in the right place
+                title = job.get("job_title", "").lower()
+                description = job.get("job_description", "").lower()
 
-            # Job passed all filters
-            job["experience_required"] = extract_experience(job.get("job_description", ""))
-            filtered_jobs.append(job)
+                if mode == "title":
+                    if not all(keyword in title for keyword in search_keywords):
+                        mode_filtered_count += 1
+                        continue
+                elif mode == "description":
+                    if not all(keyword in description for keyword in search_keywords):
+                        mode_filtered_count += 1
+                        continue
 
+                # Filter 3: Check for excluded keywords
+                if keyword_filter(job, exclude, mode):
+                    continue
+
+                # Job passed all filters
+                job["experience_required"] = extract_experience(job.get("job_description", ""))
+                filtered_jobs.append(job)
+
+                if len(filtered_jobs) >= limit:
+                    break
+
+            # Move to next batch of pages
+            current_start_page += batch_size
+
+            # If we got enough results, stop fetching
             if len(filtered_jobs) >= limit:
                 break
 
-        # Move to next batch of pages
-        current_start_page += batch_size
+        raw_jobs = all_raw_jobs  # For logging below
 
-        # If we got enough results, stop fetching
-        if len(filtered_jobs) >= limit:
-            break
+        # Debug logging
+        print(f"DEBUG - Total pages fetched: {current_start_page - 1}")
+        print(f"DEBUG - Total jobs from API: {len(raw_jobs)}")
+        print(f"DEBUG - Blocked from weak sources: {blocked_count}")
+        print(f"DEBUG - Filtered by {mode} mode: {mode_filtered_count}")
+        print(f"DEBUG - After all filters: {len(filtered_jobs)}")
+        print(f"DEBUG - Requested limit: {limit}")
 
-    raw_jobs = all_raw_jobs  # For logging below
-    
-    # Debug logging
-    print(f"DEBUG - Total pages fetched: {current_start_page - 1}")
-    print(f"DEBUG - Total jobs from API: {len(raw_jobs)}")
-    print(f"DEBUG - Blocked from weak sources: {blocked_count}")
-    print(f"DEBUG - Filtered by {mode} mode: {mode_filtered_count}")
-    print(f"DEBUG - After all filters: {len(filtered_jobs)}")
-    print(f"DEBUG - Requested limit: {limit}")
-    
+        # Cache the results in session
+        request.session["search_cache_key"] = cache_key
+        request.session["cached_jobs"] = filtered_jobs
+        request.session["cached_blocked_count"] = blocked_count
+        request.session["cached_mode_filtered_count"] = mode_filtered_count
+
+    else:
+        # Use cached results
+        print("DEBUG - Using cached results from session")
+        filtered_jobs = request.session.get("cached_jobs", [])
+        blocked_count = request.session.get("cached_blocked_count", 0)
+        mode_filtered_count = request.session.get("cached_mode_filtered_count", 0)
+
     # Paginate the filtered results
     paginator = Paginator(filtered_jobs, results_per_page)
     page_obj = paginator.get_page(page_number)
-    
+
     context = {
         "jobs": page_obj,
         "query": q,
@@ -255,5 +278,5 @@ def search_jobs(request):
         "blocked_count": blocked_count,
         "mode_filtered_count": mode_filtered_count
     }
-    
+
     return render(request, 'jobs/results.html', context)
